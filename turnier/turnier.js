@@ -170,6 +170,7 @@
 
   function normalizeAdminRow(row) {
     if (!row || row.id == null) return null;
+    if (String(row.status || "").toLowerCase() === "cancelled") return null;
     var id = String(row.id);
     if (!isUuid(id) && !(preview && String(id).indexOf("preview-") === 0)) return null;
     var state = String(row.state || "");
