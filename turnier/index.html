@@ -24,7 +24,15 @@
 
   <main id="inhalt" class="main">
     <div class="wrap">
-      <section class="panel" aria-labelledby="turnier-title">
+      <div class="tabs" role="tablist" aria-label="Bereiche">
+        <button type="button" class="tab" id="tab-anmeldung" role="tab" aria-selected="true" aria-controls="panel-anmeldung">Anmeldung</button>
+        <button type="button" class="tab" id="tab-ko" role="tab" aria-selected="false" aria-controls="panel-ko" tabindex="-1">K.-o.-System</button>
+        <button type="button" class="tab" id="tab-teilnehmer" role="tab" aria-selected="false" aria-controls="teilnehmer" tabindex="-1">Teilnehmer</button>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <section class="panel tab-panel" id="panel-anmeldung" role="tabpanel" aria-labelledby="tab-anmeldung">
         <span class="kicker">WoW Forever</span>
         <h1 id="turnier-title">Turnier der Kraft – 1-gegen-1 Duell-Turnier in WoW Forever</h1>
         <p class="lead">Arena der Gurubashi (Schlingendorntal). Horde und Allianz, K.-o.-System, um Spaß und Ehre.</p>
@@ -119,13 +127,6 @@
           <button type="submit" id="tournament-submit" class="btn submit" disabled>Zum Turnier der Kraft anmelden</button>
         </form>
 
-        <div class="list-block" id="teilnehmer">
-          <h2>Teilnehmer</h2>
-          <div id="tournament-list" aria-live="polite">
-            <p class="muted">Liste wird geladen…</p>
-          </div>
-        </div>
-
         <p class="links">
           <a href="https://discord.gg/8xCcp5ePzj">Discord</a>
           ·
@@ -135,14 +136,24 @@
     </div>
 
     <div class="wrap wrap-wide">
-      <section class="panel baum" id="turnierbaum" aria-labelledby="baum-title">
-        <h2 id="baum-title">Turnierbaum</h2>
+      <section class="panel baum tab-panel" id="panel-ko" role="tabpanel" aria-labelledby="tab-ko" hidden>
+        <h2 id="baum-title">K.-o.-System</h2>
         <p class="lead">Bis 32 freigegebene Teilnehmer gibt es eine direkte K.-o.-Runde. Ab 33 Teilnehmern gibt es zuerst Gruppen zu viert. Die ersten zwei jeder Gruppe kommen weiter.</p>
         <p id="baum-note" class="note">Turnierbaum sichtbar für angemeldete Teilnehmer.</p>
         <p id="baum-status" class="status is-ok" hidden role="status"></p>
         <div id="baum-admin"></div>
         <div id="baum-groups"></div>
         <div id="baum-ko"></div>
+      </section>
+    </div>
+
+    <div class="wrap">
+      <section class="panel tab-panel" id="teilnehmer" role="tabpanel" aria-labelledby="tab-teilnehmer" hidden>
+        <h2>Teilnehmer</h2>
+        <p class="lead">Angemeldete Spieler. Abgemeldete stehen hier nicht.</p>
+        <div id="tournament-list" aria-live="polite">
+          <p class="muted">Liste wird geladen…</p>
+        </div>
       </section>
     </div>
   </main>

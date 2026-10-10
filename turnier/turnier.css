@@ -291,6 +291,37 @@ input:focus, select:focus { outline: 2px solid var(--gold); outline-offset: 1px;
 
 .wrap-wide { width: min(76rem, calc(100% - 2rem)); }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.tab {
+  min-height: 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: rgba(16, 10, 14, 0.45);
+  color: var(--soft);
+  font: inherit;
+  font-weight: 800;
+  padding: 0.55rem 0.95rem;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  border-color: transparent;
+  color: #1a1008;
+  background: linear-gradient(100deg, #f4c343, #f59e0b);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.tab-panel[hidden] { display: none; }
+
 .baum { margin-top: 1.25rem; }
 
 .baum-banner {
