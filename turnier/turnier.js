@@ -8,6 +8,7 @@
   var VISIBLE_NOTE = "Turnierbaum sichtbar für angemeldete Teilnehmer.";
   var WAITING_NOTE = "Turnierbaum folgt nach der Auslosung.";
   var SUPABASE_URL = "https://asbhzoskbbifiuluijwl.supabase.co";
+  var AUTH_STORAGE_KEY = "sb-asbhzoskbbifiuluijwl-auth-token";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzYmh6b3NrYmJpZml1bHVpandsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0MTYyMTIsImV4cCI6MjEwNTk5MjIxMn0.bmOULxoOVViR7WWiXWeawcufNKMOH3rNZsWbSHBwUU0";
   var PREVIEW_NAMES = [
     "Aldric", "Brenna", "Cedric", "Dagmar", "Eldrin", "Falka", "Gorim", "Hilda",
@@ -31,6 +32,10 @@
   var currentBoard = null;
   var boardBusy = false;
   var listFailed = false;
+  var accountEmail = "";
+  var authEpoch = 0;
+  var loginBusy = false;
+  var roleFailed = false;
 
   function bracketApi() {
     return window.TurnierBracket || null;
@@ -55,6 +60,8 @@
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
+          flowType: "implicit",
+          storageKey: AUTH_STORAGE_KEY,
         },
       });
     } catch (err) {
@@ -391,21 +398,222 @@
     });
   }
 
-  function loadRole() {
-    if (!remote || !remote.auth || typeof remote.auth.getSession !== "function") return Promise.resolve();
-    return remote.auth.getSession().then(function (result) {
-      var session = result && result.data && result.data.session;
-      var user = session && session.user;
-      if (!user) return null;
-      return remote.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    }).then(function (result) {
-      var role = result && result.data && result.data.role;
-      officer = role === "officer" || role === "admin";
-      admin = role === "admin";
+  function applyRole(role) {
+    officer = role === "officer" || role === "admin";
+    admin = role === "admin";
+  }
+
+  function showKontoError(message) {
+    var el = document.getElementById("konto-status");
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = message;
+    el.className = "status is-error";
+  }
+
+  function renderKonto() {
+    var status = document.getElementById("konto-status");
+    var form = document.getElementById("konto-form");
+    var logout = document.getElementById("konto-logout");
+    var submit = document.getElementById("konto-submit");
+    if (submit) submit.disabled = loginBusy;
+    if (!status || !form) return;
+    if (previewActive()) {
+      form.hidden = true;
+      if (logout) logout.hidden = true;
+      status.hidden = false;
+      status.className = "status is-ok";
+      status.textContent = preview.role === "admin"
+        ? "Beispielansicht als Administrator."
+        : "Beispielansicht ohne Gildenkonto.";
+      return;
+    }
+    if (!accountEmail) {
+      form.hidden = false;
+      if (logout) logout.hidden = true;
+      if (!loginBusy && status.className.indexOf("is-error") < 0) {
+        status.hidden = true;
+        status.textContent = "";
+      }
+      return;
+    }
+    form.hidden = true;
+    if (logout) logout.hidden = false;
+    status.hidden = false;
+    if (roleFailed) {
+      status.className = "status is-error";
+      status.textContent = "Angemeldet als " + accountEmail + ". Die Rolle konnte nicht gelesen werden.";
+      return;
+    }
+    status.className = "status is-ok";
+    var who = accountEmail;
+    if (admin) who += " (Administrator)";
+    else if (officer) who += " (Offizier)";
+    status.textContent = "Angemeldet als " + who + ".";
+  }
+
+  function userFromSession(session) {
+    if (!session) return null;
+    var id = "";
+    var email = "";
+    try {
+      if (session.user && session.user.id) {
+        id = String(session.user.id);
+        email = String(session.user.email || "");
+      }
+    } catch (err) {
+      id = "";
+    }
+    if (!id) id = userIdFromToken(session.access_token);
+    if (!id) return null;
+    if (!email) email = emailFromToken(session.access_token);
+    return { id: id, email: email };
+  }
+
+  function tokenPart(token, field) {
+    try {
+      var part = String(token || "").split(".")[1];
+      if (!part) return "";
+      var padded = part.replace(/-/g, "+").replace(/_/g, "/");
+      while (padded.length % 4) padded += "=";
+      var json = JSON.parse(atob(padded));
+      return json && json[field] ? String(json[field]) : "";
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function userIdFromToken(token) {
+    return tokenPart(token, "sub");
+  }
+
+  function emailFromToken(token) {
+    return tokenPart(token, "email");
+  }
+
+  function clearAccount() {
+    accountEmail = "";
+    roleFailed = false;
+    applyRole("");
+    adminRows = null;
+    currentBoard = null;
+    renderKonto();
+    return refreshAfterSignup();
+  }
+
+  function loadProfile(user) {
+    var current = authEpoch + 1;
+    authEpoch = current;
+    accountEmail = user.email || "";
+    roleFailed = false;
+    if (!remote || typeof remote.from !== "function") {
+      roleFailed = true;
+      applyRole("");
+      renderKonto();
+      return Promise.resolve();
+    }
+    return remote.from("profiles").select("role").eq("id", user.id).maybeSingle().then(function (result) {
+      if (current !== authEpoch) return null;
+      if (!result || result.error || !result.data) {
+        roleFailed = true;
+        applyRole("");
+        renderKonto();
+        return refreshAfterSignup();
+      }
+      roleFailed = false;
+      applyRole(String(result.data.role || ""));
+      renderKonto();
+      return refreshAfterSignup();
     }).catch(function () {
-      officer = false;
-      admin = false;
+      if (current !== authEpoch) return null;
+      roleFailed = true;
+      applyRole("");
+      renderKonto();
+      return refreshAfterSignup();
     });
+  }
+
+  function adoptAuthSession(session) {
+    var user = userFromSession(session);
+    if (!user) return clearAccount();
+    return loadProfile(user);
+  }
+
+  function loginErrorText(error) {
+    var msg = String((error && error.message) || "");
+    if (/invalid login credentials/i.test(msg)) return "E-Mail oder Passwort ist falsch.";
+    if (/email not confirmed/i.test(msg)) return "Bitte die E-Mail zuerst bestätigen.";
+    if (/rate limit/i.test(msg)) return "Zu viele Versuche. Bitte kurz warten.";
+    return "Anmeldung gerade nicht möglich.";
+  }
+
+  function submitLogin(form) {
+    if (loginBusy || !remote || !remote.auth) return;
+    var email = fieldValue("konto-email").trim().toLowerCase();
+    var password = fieldValue("konto-password");
+    if (!email || password.length < 6) {
+      showKontoError("Bitte E-Mail und Passwort eingeben.");
+      return;
+    }
+    loginBusy = true;
+    renderKonto();
+    remote.auth.signInWithPassword({ email: email, password: password }).then(function (result) {
+      if (!result || result.error || !result.data || !result.data.session) {
+        showKontoError(loginErrorText(result && result.error));
+        return;
+      }
+      if (form) form.reset();
+      return adoptAuthSession(result.data.session);
+    }).catch(function () {
+      showKontoError("Anmeldung gerade nicht möglich.");
+    }).then(function () {
+      loginBusy = false;
+      renderKonto();
+    });
+  }
+
+  function logoutAccount() {
+    if (!remote || !remote.auth) {
+      clearAccount();
+      return;
+    }
+    remote.auth.signOut().catch(function () {
+      return null;
+    }).then(function () {
+      return clearAccount();
+    });
+  }
+
+  function startAuth() {
+    if (!remote || !remote.auth || typeof remote.auth.onAuthStateChange !== "function") {
+      renderKonto();
+      return refreshAfterSignup();
+    }
+    var sawSession = false;
+    remote.auth.onAuthStateChange(function (event, session) {
+      if (event === "SIGNED_OUT") {
+        sawSession = false;
+        if (!loginBusy) clearAccount();
+        return;
+      }
+      if (event !== "INITIAL_SESSION" && event !== "SIGNED_IN") return;
+      if (event === "SIGNED_IN" && loginBusy) return;
+      if (session && session.access_token) sawSession = true;
+      adoptAuthSession(session);
+    });
+    if (typeof remote.auth.getSession === "function") {
+      remote.auth.getSession().then(function (result) {
+        var session = result && result.data && result.data.session;
+        if (session && session.access_token) {
+          sawSession = true;
+          adoptAuthSession(session);
+          return;
+        }
+        if (!sawSession) adoptAuthSession(null);
+      }).catch(function () {
+        if (!sawSession) adoptAuthSession(null);
+      });
+    }
   }
 
   function refreshAfterSignup() {
@@ -1068,6 +1276,7 @@
     }
     renderList();
     renderBoard();
+    renderKonto();
   }
 
   function showListFailure() {
@@ -1089,6 +1298,15 @@
         submitSignup(form);
       });
     }
+    var kontoForm = document.getElementById("konto-form");
+    if (kontoForm) {
+      kontoForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        submitLogin(kontoForm);
+      });
+    }
+    var logout = document.getElementById("konto-logout");
+    if (logout) logout.addEventListener("click", logoutAccount);
     preview = previewConfig();
     remote = createRemote();
     if (preview && preview.role !== "gast") {
@@ -1097,14 +1315,14 @@
     }
     if (!remote) {
       showStatus("Die Anmeldung ist gerade nicht erreichbar.", "error");
+      showKontoError("Die Anmeldung ist gerade nicht erreichbar.");
+      var konto = document.getElementById("konto-form");
+      if (konto) konto.hidden = false;
       showListFailure();
       showBoardMessage(VISIBLE_NOTE, "deny");
       return;
     }
-    loadRole().then(loadList).then(loadAdminSignups).then(function () {
-      renderList();
-      return loadBoard();
-    });
+    startAuth();
   }
 
   if (document.readyState === "loading") {

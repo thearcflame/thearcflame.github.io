@@ -59,6 +59,26 @@
 
         <p id="signup-note" class="note" role="status">Anmeldung zum Turnier der Kraft ab Sonntag, 11.10.2026.</p>
 
+        <div class="konto" id="konto">
+          <h2>Gildenkonto</h2>
+          <p class="muted">Dieselbe Anmeldung wie auf der Gildenseite. Nur ein Administrator kann Teilnehmer freigeben.</p>
+          <p id="konto-status" class="status is-ok">Anmeldung wird geprüft…</p>
+          <form id="konto-form" hidden>
+            <div class="fields">
+              <div>
+                <label for="konto-email">E-Mail</label>
+                <input type="email" id="konto-email" name="email" autocomplete="username" inputmode="email" maxlength="120" required>
+              </div>
+              <div>
+                <label for="konto-password">Passwort</label>
+                <input type="password" id="konto-password" name="password" autocomplete="current-password" minlength="6" required>
+              </div>
+            </div>
+            <button type="submit" class="btn-admin" id="konto-submit">Anmelden</button>
+          </form>
+          <button type="button" class="btn-ghost" id="konto-logout" hidden>Abmelden</button>
+        </div>
+
         <form id="tournament-form" novalidate>
           <fieldset id="tournament-fields" disabled>
             <div class="fields">
