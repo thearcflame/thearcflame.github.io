@@ -7,6 +7,7 @@
   var GUEST_LIST = "Die Teilnehmerliste sehen Gildenmitglieder und Angemeldete.";
   var VISIBLE_NOTE = "Turnierbaum sichtbar für angemeldete Teilnehmer.";
   var WAITING_NOTE = "Turnierbaum folgt nach der Auslosung.";
+  var PREVIEW_NOTE = "Vorschau – noch nicht ausgelost";
   var SUPABASE_URL = "https://asbhzoskbbifiuluijwl.supabase.co";
   var AUTH_STORAGE_KEY = "sb-asbhzoskbbifiuluijwl-auth-token";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzYmh6b3NrYmJpZml1bHVpandsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0MTYyMTIsImV4cCI6MjEwNTk5MjIxMn0.bmOULxoOVViR7WWiXWeawcufNKMOH3rNZsWbSHBwUU0";
@@ -30,6 +31,9 @@
   var remote = null;
   var preview = null;
   var currentBoard = null;
+  var boardApproved = null;
+  var shownBoard = null;
+  var shownPreview = false;
   var boardBusy = false;
   var listFailed = false;
   var accountEmail = "";
@@ -232,7 +236,7 @@
         faction: row.faction,
         discord_name: row.discord_name,
         is_mine: row.is_mine === true,
-        state: "",
+        state: row.state || "",
       };
     });
     if (admin && adminRows) {
@@ -264,7 +268,7 @@
   function stateLabel(state) {
     if (state === "approved") return "Freigegeben";
     if (state === "rejected") return "Abgelehnt";
-    if (state === "pending") return "Wartet auf Freigabe";
+    if (state === "pending") return "Wartet";
     return "";
   }
 
@@ -373,9 +377,29 @@
       var data = Array.isArray(result.data) ? result.data : [];
       rows = data.map(normalizeRow).filter(Boolean);
       rows.sort(compareRows);
-      renderList();
+      return loadApprovals(current);
     }).catch(function () {
       listFailed = true;
+    });
+  }
+
+  function loadApprovals(listEpoch) {
+    if (previewActive() || !remote || typeof remote.rpc !== "function") return Promise.resolve();
+    return remote.rpc("list_tournament_signup_approvals").then(function (result) {
+      if (listEpoch !== epoch) return;
+      if (!result || result.error || !Array.isArray(result.data)) return;
+      var map = {};
+      result.data.forEach(function (row) {
+        if (!row || row.id == null) return;
+        var state = String(row.state || "");
+        if (state !== "approved" && state !== "rejected" && state !== "pending") state = "pending";
+        map[String(row.id)] = state;
+      });
+      rows.forEach(function (row) {
+        if (map[row.id]) row.state = map[row.id];
+      });
+    }).catch(function () {
+      return null;
     });
   }
 
@@ -497,6 +521,7 @@
     applyRole("");
     adminRows = null;
     currentBoard = null;
+    boardApproved = null;
     renderKonto();
     return refreshAfterSignup();
   }
@@ -765,19 +790,118 @@
     });
   }
 
+  function asPreviewSignup(row) {
+    if (!row || row.id == null) return null;
+    var id = String(row.id);
+    if (!isUuid(id) && id.indexOf("preview-") !== 0) return null;
+    var name = String(row.character_name || row.name || "").trim();
+    if (!name) return null;
+    return {
+      id: id,
+      character_name: name,
+      className: String(row.className || row["class"] || "").trim(),
+      faction: String(row.faction || "").toLowerCase(),
+    };
+  }
+
+  function approvedForPreview() {
+    if (admin && adminRows) return approvedSignups().map(asPreviewSignup).filter(Boolean);
+    if (Array.isArray(boardApproved)) return boardApproved;
+    return null;
+  }
+
+  function stableSeed(list) {
+    var text = list.map(function (row) { return String(row.id); }).sort().join("|");
+    var hash = 2166136261;
+    var i;
+    for (i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function previewBoardFrom(list) {
+    var api = bracketApi();
+    if (!api || list.length < 2) return null;
+    try {
+      return api.createDraw(list, mulberry32(stableSeed(list)));
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function renderEmptyTree(message) {
+    var host = document.getElementById("baum-ko");
+    if (!host) return;
+    var block = document.createElement("div");
+    block.className = "ko-wrap";
+    block.appendChild(h("h3", "", "K.-o.-Runde"));
+    if (message) block.appendChild(h("p", "muted", message));
+    var scroller = document.createElement("div");
+    scroller.className = "ko-scroll";
+    var ko = document.createElement("div");
+    ko.className = "ko";
+    var col = document.createElement("div");
+    col.className = "ko-col";
+    col.appendChild(h("h3", "", "Finale"));
+    var box = document.createElement("div");
+    box.className = "match";
+    ["offen", "offen"].forEach(function (label) {
+      var slot = document.createElement("div");
+      slot.className = "slot";
+      slot.appendChild(h("p", "slot-name", label));
+      box.appendChild(slot);
+    });
+    col.appendChild(box);
+    ko.appendChild(col);
+    scroller.appendChild(ko);
+    block.appendChild(scroller);
+    host.appendChild(block);
+  }
+
   function renderBoard() {
     clearBoardNodes();
+    shownBoard = null;
+    shownPreview = false;
     if (!canViewBoard()) {
       showBoardMessage(VISIBLE_NOTE, "deny");
       return;
     }
-    if (!currentBoard) {
+    if (currentBoard) {
+      shownBoard = currentBoard;
+      showBoardMessage("", "");
+      renderAdminBar();
+      renderGroups();
+      renderKo();
+      return;
+    }
+    var approved = approvedForPreview();
+    if (!approved) {
       showBoardMessage(WAITING_NOTE, "wait");
       renderAdminBar();
       return;
     }
-    showBoardMessage("", "");
+    shownPreview = true;
+    showBoardMessage(PREVIEW_NOTE, "preview");
     renderAdminBar();
+    if (approved.length < 2) {
+      renderEmptyTree(approved.length === 0
+        ? "Noch kein freigegebener Teilnehmer."
+        : "Mindestens zwei freigegebene Teilnehmer.");
+      return;
+    }
+    shownBoard = previewBoardFrom(approved);
+    if (!shownBoard) {
+      renderEmptyTree("Die Vorschau konnte nicht aufgebaut werden.");
+      return;
+    }
+    if (shownBoard.mode === "groups") {
+      var groupsHost = document.getElementById("baum-groups");
+      if (groupsHost) {
+        groupsHost.appendChild(h("p", "baum-banner", "Ab 33 freigegebenen Teilnehmern zuerst Gruppen. Die ersten zwei jeder Gruppe kommen weiter."));
+      }
+    }
     renderGroups();
     renderKo();
   }
@@ -913,8 +1037,8 @@
         showBoardStatus(errorText(result && result.error, "Die Auslosung konnte nicht gelöscht werden."), "error");
         return;
       }
-      currentBoard = null;
       showBoardStatus("Auslosung gelöscht.", "info");
+      return loadBoard();
     }).catch(function () {
       showBoardStatus("Die Auslosung konnte nicht gelöscht werden.", "error");
     }).then(function () {
@@ -950,7 +1074,7 @@
   function slotView(match, side) {
     var api = bracketApi();
     var key = side === "b" ? "b" : "a";
-    var entry = api ? api.entryById(currentBoard, match[key]) : null;
+    var entry = api ? api.entryById(shownBoard, match[key]) : null;
     if (entry) return { entry: entry, bye: false, text: "" };
     if (match.byeSide === side) return { entry: null, bye: true, text: "Freilos" };
     var placeholder = side === "b" ? match.placeholderB : match.placeholderA;
@@ -973,7 +1097,7 @@
       text.appendChild(h("p", "slot-name", view.text));
     }
     slot.appendChild(text);
-    if (admin && view.entry && match.a && match.b && !match.bye && !boardBusy) {
+    if (admin && !shownPreview && view.entry && match.a && match.b && !match.bye && !boardBusy) {
       var button = document.createElement("button");
       button.type = "button";
       button.className = "mini";
@@ -993,7 +1117,7 @@
     box.setAttribute("aria-label", title);
     box.appendChild(renderSlot(match, "a"));
     box.appendChild(renderSlot(match, "b"));
-    if (admin && match.winner && !match.bye && match.a && match.b) {
+    if (admin && !shownPreview && match.winner && !match.bye && match.a && match.b) {
       var undo = document.createElement("button");
       undo.type = "button";
       undo.className = "mini";
@@ -1013,21 +1137,21 @@
   function renderGroups() {
     var api = bracketApi();
     var host = document.getElementById("baum-groups");
-    if (!host || !currentBoard || !api || currentBoard.mode !== "groups") return;
+    if (!host || !shownBoard || !api || shownBoard.mode !== "groups") return;
     var block = document.createElement("div");
     block.className = "group-list";
     block.appendChild(h("h3", "", "Gruppen"));
-    var groups = currentBoard.groups.slice().sort(function (a, b) { return a.sort - b.sort; });
+    var groups = shownBoard.groups.slice().sort(function (a, b) { return a.sort - b.sort; });
     groups.forEach(function (group) {
       var card = document.createElement("article");
       card.className = "group-card";
       card.appendChild(h("h3", "", "Gruppe " + group.label));
-      var members = currentBoard.entries.filter(function (entry) { return entry.groupId === group.id; });
-      var matches = currentBoard.matches.filter(function (match) {
+      var members = shownBoard.entries.filter(function (entry) { return entry.groupId === group.id; });
+      var matches = shownBoard.matches.filter(function (match) {
         return match.stage === "group" && match.groupId === group.id;
       }).sort(function (a, b) { return a.slot - b.slot; });
       var ranked = api.rankEntries(members, matches);
-      var done = api.groupComplete(currentBoard, group.id);
+      var done = api.groupComplete(shownBoard, group.id);
       var table = document.createElement("table");
       table.className = "standings";
       var head = document.createElement("thead");
@@ -1043,7 +1167,7 @@
       table.appendChild(head);
       var body = document.createElement("tbody");
       ranked.forEach(function (row, index) {
-        var entry = api.entryById(currentBoard, row.id);
+        var entry = api.entryById(shownBoard, row.id);
         var tr = document.createElement("tr");
         var nameCell = document.createElement("td");
         nameCell.textContent = entry ? entry.name : "Unbekannt";
@@ -1081,15 +1205,15 @@
   function renderKo() {
     var api = bracketApi();
     var host = document.getElementById("baum-ko");
-    if (!host || !currentBoard || !api) return;
-    var rounds = api.koRounds(currentBoard);
+    if (!host || !shownBoard || !api) return;
+    var rounds = api.koRounds(shownBoard);
     if (!rounds.length) return;
     var block = document.createElement("div");
     block.className = "ko-wrap";
     block.appendChild(h("h3", "", "K.-o.-Runde"));
     var final = rounds[rounds.length - 1][0];
     if (final && final.winner) {
-      var winner = api.entryById(currentBoard, final.winner);
+      var winner = api.entryById(shownBoard, final.winner);
       if (winner) {
         var banner = document.createElement("div");
         banner.className = "champion";
@@ -1156,6 +1280,11 @@
       }
       adminMissing = false;
       currentBoard = data.draw || null;
+      if (Object.prototype.hasOwnProperty.call(data, "approved") && Array.isArray(data.approved)) {
+        boardApproved = data.approved.map(asPreviewSignup).filter(Boolean);
+      } else if (!(admin && adminRows)) {
+        boardApproved = null;
+      }
       renderBoard();
     }).catch(function () {
       currentBoard = null;
@@ -1171,7 +1300,7 @@
     if (raw !== "5" && raw !== "16" && raw !== "40") return null;
     var role = params.get("rolle");
     if (role !== "gast" && role !== "teilnehmer" && role !== "admin") role = "teilnehmer";
-    return { count: Number(raw), role: role };
+    return { count: Number(raw), role: role, drawn: params.get("auslosung") !== "nein" };
   }
 
   function mulberry32(seed) {
@@ -1253,14 +1382,17 @@
         faction: row.faction,
         discord_name: row.discord_name,
         is_mine: false,
-        state: "",
+        state: row.state || "",
       };
     });
     adminRows = admin ? people.map(function (row) {
       return normalizeAdminRow(row);
     }).filter(Boolean) : null;
+    boardApproved = people.filter(function (row) {
+      return row.state === "approved";
+    }).map(asPreviewSignup).filter(Boolean);
     currentBoard = null;
-    if (api) {
+    if (config.drawn && api) {
       try {
         currentBoard = api.createDraw(people.filter(function (row) { return row.state === "approved"; }), mulberry32(config.count));
         if (config.count === 40 && currentBoard.groups[0]) currentBoard = playSampleGroup(currentBoard, currentBoard.groups[0]);
@@ -1289,7 +1421,45 @@
     list.appendChild(note);
   }
 
+  function selectTab(id) {
+    var tabs = [
+      { id: "anmeldung", button: "tab-anmeldung", panel: "panel-anmeldung" },
+      { id: "ko", button: "tab-ko", panel: "panel-ko" },
+      { id: "teilnehmer", button: "tab-teilnehmer", panel: "teilnehmer" },
+    ];
+    tabs.forEach(function (tab) {
+      var button = document.getElementById(tab.button);
+      var panel = document.getElementById(tab.panel);
+      var on = tab.id === id;
+      if (button) {
+        button.setAttribute("aria-selected", on ? "true" : "false");
+        button.tabIndex = on ? 0 : -1;
+      }
+      if (panel) panel.hidden = !on;
+    });
+  }
+
+  function setupTabs() {
+    var buttons = [
+      { id: "anmeldung", button: "tab-anmeldung" },
+      { id: "ko", button: "tab-ko" },
+      { id: "teilnehmer", button: "tab-teilnehmer" },
+    ];
+    buttons.forEach(function (tab) {
+      var button = document.getElementById(tab.button);
+      if (!button) return;
+      button.addEventListener("click", function () {
+        selectTab(tab.id);
+      });
+    });
+    var hash = String(window.location.hash || "");
+    if (hash === "#teilnehmer") selectTab("teilnehmer");
+    else if (hash === "#turnierbaum" || hash === "#ko") selectTab("ko");
+    else selectTab("anmeldung");
+  }
+
   function boot() {
+    setupTabs();
     syncSignupGate();
     var form = document.getElementById("tournament-form");
     if (form) {
