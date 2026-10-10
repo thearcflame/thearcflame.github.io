@@ -284,6 +284,11 @@ input:focus, select:focus { outline: 2px solid var(--gold); outline-offset: 1px;
   input, select { font-size: 16px; }
 }
 
+.konto { margin-top: 1.25rem; }
+.konto h2 { font-size: 1.35rem; }
+.konto .btn-admin, .konto .btn-ghost { margin-top: 0.85rem; }
+#konto-form[hidden], #konto-logout[hidden] { display: none; }
+
 .wrap-wide { width: min(76rem, calc(100% - 2rem)); }
 
 .baum { margin-top: 1.25rem; }
