@@ -72,6 +72,11 @@
 
         <p id="signup-note" class="note note-open" role="status">ANMELDUNG OFFEN</p>
 
+        <aside class="discord-box">
+          <p>Wichtig: Tritt unserem Discord bei, damit du in den Turnier-Sprachkanal kommst!</p>
+          <a class="btn btn-discord" href="https://discord.gg/8xCcp5ePzj" target="_blank" rel="noopener noreferrer">Discord beitreten</a>
+        </aside>
+
         <form id="tournament-form" novalidate>
           <fieldset id="tournament-fields" disabled>
             <div class="fields">
@@ -105,6 +110,7 @@
               <div>
                 <label for="tournament-discord">Discord-Name</label>
                 <input type="text" id="tournament-discord" name="discord_name" autocomplete="off" placeholder="z.B. Name" minlength="2" maxlength="40" required>
+                <p class="field-hint">Dein Discord-Benutzername (nicht der Anzeigename)</p>
               </div>
             </div>
             <div class="hp" aria-hidden="true">
