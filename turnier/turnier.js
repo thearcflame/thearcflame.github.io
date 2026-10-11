@@ -490,6 +490,16 @@
     status.textContent = "Angemeldet als " + who + ".";
   }
 
+  function showOrgaBox(focusEmail) {
+    var box = document.getElementById("konto");
+    if (box && typeof box.scrollIntoView === "function") {
+      box.scrollIntoView({ block: "center" });
+    }
+    if (!focusEmail) return;
+    var email = document.getElementById("konto-email");
+    if (email) email.focus();
+  }
+
   function userFromSession(session) {
     if (!session) return null;
     var id = "";
@@ -608,6 +618,7 @@
     }).then(function () {
       loginBusy = false;
       renderKonto();
+      if (accountEmail) showOrgaBox(false);
     });
   }
 
@@ -1556,8 +1567,9 @@
     var orgaToggle = document.getElementById("orga-toggle");
     if (orgaToggle) {
       orgaToggle.addEventListener("click", function () {
-        orgaOpen = !orgaOpen;
+        orgaOpen = true;
         renderKonto();
+        showOrgaBox(true);
       });
     }
     var form = document.getElementById("tournament-form");
