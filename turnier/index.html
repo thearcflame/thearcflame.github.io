@@ -23,6 +23,7 @@
   </header>
 
   <main id="inhalt" class="main">
+    <div class="tabbar">
     <div class="wrap">
       <div class="tabs" role="tablist" aria-label="Bereiche">
         <button type="button" class="tab" id="tab-anmeldung" role="tab" aria-selected="true" aria-controls="panel-anmeldung">Anmeldung</button>
@@ -30,6 +31,7 @@
         <button type="button" class="tab" id="tab-ko" role="tab" aria-selected="false" aria-controls="panel-ko" tabindex="-1">K.-o.-System</button>
         <button type="button" class="tab" id="tab-teilnehmer" role="tab" aria-selected="false" aria-controls="teilnehmer" tabindex="-1">Teilnehmer</button>
       </div>
+    </div>
     </div>
 
     <div class="wrap">
@@ -64,31 +66,11 @@
           </li>
           <li class="card card-hot">
             <p class="card-label">Anmeldung</p>
-            <p class="card-value">ab Sonntag, 11.10.2026</p>
+            <p class="card-value">ANMELDUNG OFFEN</p>
           </li>
         </ul>
 
-        <p id="signup-note" class="note" role="status">Anmeldung zum Turnier der Kraft ab Sonntag, 11.10.2026.</p>
-
-        <div class="konto" id="konto">
-          <h2>Gildenkonto</h2>
-          <p class="muted">Dieselbe Anmeldung wie auf der Gildenseite. Nur ein Administrator kann Teilnehmer freigeben.</p>
-          <p id="konto-status" class="status is-ok">Anmeldung wird geprüft…</p>
-          <form id="konto-form" hidden>
-            <div class="fields">
-              <div>
-                <label for="konto-email">E-Mail</label>
-                <input type="email" id="konto-email" name="email" autocomplete="username" inputmode="email" maxlength="120" required>
-              </div>
-              <div>
-                <label for="konto-password">Passwort</label>
-                <input type="password" id="konto-password" name="password" autocomplete="current-password" minlength="6" required>
-              </div>
-            </div>
-            <button type="submit" class="btn-admin" id="konto-submit">Anmelden</button>
-          </form>
-          <button type="button" class="btn-ghost" id="konto-logout" hidden>Abmelden</button>
-        </div>
+        <p id="signup-note" class="note note-open" role="status">ANMELDUNG OFFEN</p>
 
         <form id="tournament-form" novalidate>
           <fieldset id="tournament-fields" disabled>
@@ -125,6 +107,10 @@
                 <input type="text" id="tournament-discord" name="discord_name" autocomplete="off" placeholder="z.B. Name" minlength="2" maxlength="40" required>
               </div>
             </div>
+            <div class="hp" aria-hidden="true">
+              <label for="tournament-website">Website</label>
+              <input type="text" id="tournament-website" name="website" tabindex="-1" autocomplete="off">
+            </div>
           </fieldset>
           <label class="rules-check" for="tournament-rules">
             <input type="checkbox" id="tournament-rules" name="rules_accepted">
@@ -139,6 +125,27 @@
           ·
           <a href="https://thearcflame.github.io/">Gilde</a>
         </p>
+        <p class="orga">
+          <button type="button" class="orga-toggle" id="orga-toggle">Orga-Login</button>
+        </p>
+        <div class="konto" id="konto" hidden>
+          <p class="muted">Nur für die Turnierleitung.</p>
+          <p id="konto-status" class="status is-ok" hidden></p>
+          <form id="konto-form">
+            <div class="fields">
+              <div>
+                <label for="konto-email">E-Mail</label>
+                <input type="email" id="konto-email" name="email" autocomplete="username" inputmode="email" maxlength="120" required>
+              </div>
+              <div>
+                <label for="konto-password">Passwort</label>
+                <input type="password" id="konto-password" name="password" autocomplete="current-password" minlength="6" required>
+              </div>
+            </div>
+            <button type="submit" class="btn-admin" id="konto-submit">Anmelden</button>
+          </form>
+          <button type="button" class="btn-ghost" id="konto-logout" hidden>Abmelden</button>
+        </div>
       </section>
     </div>
 
@@ -161,7 +168,7 @@
       <section class="panel baum tab-panel" id="panel-ko" role="tabpanel" aria-labelledby="tab-ko" hidden>
         <h2 id="baum-title">K.-o.-System</h2>
         <p class="lead">Bis 32 freigegebene Teilnehmer gibt es eine direkte K.-o.-Runde. Ab 33 Teilnehmern gibt es zuerst Gruppen zu viert. Die ersten zwei jeder Gruppe kommen weiter.</p>
-        <p id="baum-note" class="note">Turnierbaum sichtbar für angemeldete Teilnehmer.</p>
+        <p id="baum-note" class="note" hidden></p>
         <p id="baum-status" class="status is-ok" hidden role="status"></p>
         <div id="baum-admin"></div>
         <div id="baum-groups"></div>
@@ -172,7 +179,7 @@
     <div class="wrap">
       <section class="panel tab-panel" id="teilnehmer" role="tabpanel" aria-labelledby="tab-teilnehmer" hidden>
         <h2>Teilnehmer</h2>
-        <p class="lead">Angemeldete Spieler. Abgemeldete stehen hier nicht.</p>
+        <p class="lead">Freigegebene Teilnehmer. Offene und abgelehnte Anmeldungen sieht nur die Orga.</p>
         <div id="tournament-list" aria-live="polite">
           <p class="muted">Liste wird geladen…</p>
         </div>

@@ -4,7 +4,8 @@
   var CLASSES = ["Krieger", "Paladin", "Jäger", "Schurke", "Priester", "Schamane", "Magier", "Hexenmeister", "Druide"];
   var FACTIONS = ["horde", "alliance"];
   var SIGNUP_FROM = "2026-10-11";
-  var GUEST_LIST = "Die Teilnehmerliste sehen Gildenmitglieder und Angemeldete.";
+  var GUEST_LIST = "Noch kein freigegebener Teilnehmer.";
+  var THANKS = "Danke! Deine Anmeldung ist eingegangen und wird von Malus Magnus freigegeben.";
   var VISIBLE_NOTE = "Turnierbaum sichtbar für angemeldete Teilnehmer.";
   var WAITING_NOTE = "Turnierbaum folgt nach der Auslosung.";
   var PREVIEW_NOTE = "Vorschau – noch nicht ausgelost";
@@ -40,6 +41,7 @@
   var authEpoch = 0;
   var loginBusy = false;
   var roleFailed = false;
+  var orgaOpen = false;
 
   function bracketApi() {
     return window.TurnierBracket || null;
@@ -209,10 +211,7 @@
   }
 
   function canViewBoard() {
-    if (preview && preview.role === "gast") return false;
-    if (previewActive()) return true;
-    if (admin) return true;
-    return rows.some(function (row) { return row.is_mine === true; });
+    return true;
   }
 
   function syncSignupGate() {
@@ -220,7 +219,11 @@
     var note = document.getElementById("signup-note");
     var fields = document.getElementById("tournament-fields");
     var button = document.getElementById("tournament-submit");
-    if (note) note.hidden = open;
+    if (note) {
+      note.hidden = false;
+      note.textContent = open ? "ANMELDUNG OFFEN" : "Anmeldung zum Turnier der Kraft ab Sonntag, 11.10.2026.";
+      note.className = open ? "note note-open" : "note";
+    }
     if (fields) fields.disabled = !open;
     if (button) button.disabled = !open || sending;
   }
@@ -234,7 +237,7 @@
         character_name: row.character_name,
         className: row.className,
         faction: row.faction,
-        discord_name: row.discord_name,
+        discord_name: "",
         is_mine: row.is_mine === true,
         state: row.state || "",
       };
@@ -254,6 +257,7 @@
           };
         } else {
           map[row.id].state = row.state;
+          map[row.id].discord_name = row.discord_name;
         }
       });
     }
@@ -309,7 +313,7 @@
       meta.className = "person-meta";
       meta.textContent = [row.className, factionLabel(row.faction)].filter(Boolean).join(" · ");
       text.append(name, meta);
-      if (row.discord_name) {
+      if (admin && row.discord_name) {
         var discord = document.createElement("p");
         discord.className = "person-meta";
         discord.textContent = "Discord: " + row.discord_name;
@@ -367,17 +371,21 @@
     if (!remote || typeof remote.rpc !== "function") return Promise.resolve();
     var current = epoch + 1;
     epoch = current;
-    return remote.rpc("list_tournament_signups").then(function (result) {
+    return remote.rpc("list_public_tournament_signups").then(function (result) {
       if (current !== epoch) return;
       if (!result || result.error) {
-        listFailed = true;
+        listFailed = !missingRpc(result && result.error);
+        rows = [];
         return;
       }
       listFailed = false;
       var data = Array.isArray(result.data) ? result.data : [];
       rows = data.map(normalizeRow).filter(Boolean);
+      rows.forEach(function (row) {
+        row.state = "approved";
+        row.discord_name = "";
+      });
       rows.sort(compareRows);
-      return loadApprovals(current);
     }).catch(function () {
       listFailed = true;
     });
@@ -436,23 +444,27 @@
   }
 
   function renderKonto() {
+    var box = document.getElementById("konto");
+    var toggle = document.getElementById("orga-toggle");
     var status = document.getElementById("konto-status");
     var form = document.getElementById("konto-form");
     var logout = document.getElementById("konto-logout");
     var submit = document.getElementById("konto-submit");
     if (submit) submit.disabled = loginBusy;
-    if (!status || !form) return;
-    if (previewActive()) {
+    if (!status || !form || !box) return;
+    if (previewActive() && preview.role === "admin") {
+      if (toggle) toggle.hidden = true;
+      box.hidden = false;
       form.hidden = true;
       if (logout) logout.hidden = true;
       status.hidden = false;
       status.className = "status is-ok";
-      status.textContent = preview.role === "admin"
-        ? "Beispielansicht als Administrator."
-        : "Beispielansicht ohne Gildenkonto.";
+      status.textContent = "Beispielansicht als Administrator.";
       return;
     }
     if (!accountEmail) {
+      if (toggle) toggle.hidden = false;
+      box.hidden = !orgaOpen;
       form.hidden = false;
       if (logout) logout.hidden = true;
       if (!loginBusy && status.className.indexOf("is-error") < 0) {
@@ -461,6 +473,8 @@
       }
       return;
     }
+    if (toggle) toggle.hidden = true;
+    box.hidden = false;
     form.hidden = true;
     if (logout) logout.hidden = false;
     status.hidden = false;
@@ -684,21 +698,46 @@
       showStatus("Bitte die Regeln lesen und akzeptieren.", "error");
       return;
     }
+    var honeypot = fieldValue("tournament-website").trim();
+    if (honeypot) {
+      if (form) form.reset();
+      showStatus(THANKS, "info");
+      return;
+    }
+    if (previewActive()) {
+      var taken = rows.some(function (row) {
+        return String(row.character_name || "").toLowerCase() === name.toLowerCase();
+      }) || (adminRows || []).some(function (row) {
+        return String(row.character_name || "").toLowerCase() === name.toLowerCase();
+      });
+      if (taken) {
+        showStatus("Der Charakter „" + name + "“ ist schon angemeldet.", "error");
+        return;
+      }
+      if (form) form.reset();
+      showStatus(THANKS, "info");
+      return;
+    }
     var button = document.getElementById("tournament-submit");
     sending = true;
     if (button) button.disabled = true;
-    remote.rpc("submit_tournament_signup", {
+    remote.rpc("submit_tournament_signup_public", {
       p_character_name: name,
       p_class: className,
       p_faction: faction,
       p_discord_name: discord,
+      p_website: "",
     }).then(function (result) {
       if (!result || result.error) {
+        if (missingRpc(result && result.error)) {
+          showStatus("Die Anmeldung ist noch nicht eingerichtet.", "error");
+          return null;
+        }
         showStatus(errorText(result && result.error, "Die Anmeldung konnte nicht gespeichert werden."), "error");
         return null;
       }
       if (form) form.reset();
-      showStatus("Danke. Du bist angemeldet.", "info");
+      showStatus(THANKS, "info");
       return refreshAfterSignup();
     }).catch(function () {
       showStatus("Die Anmeldung konnte nicht gespeichert werden.", "error");
@@ -812,7 +851,9 @@
   function approvedForPreview() {
     if (admin && adminRows) return approvedSignups().map(asPreviewSignup).filter(Boolean);
     if (Array.isArray(boardApproved)) return boardApproved;
-    return null;
+    return rows.filter(function (row) {
+      return row.state === "approved";
+    }).map(asPreviewSignup).filter(Boolean);
   }
 
   function stableSeed(list) {
@@ -1279,8 +1320,8 @@
       var data = result.data || {};
       if (data.access !== "ok") {
         currentBoard = null;
+        if (!(admin && adminRows)) boardApproved = null;
         renderBoard();
-        showBoardMessage(VISIBLE_NOTE, "deny");
         return;
       }
       adminMissing = false;
@@ -1378,16 +1419,18 @@
       { name: "Torbjorn", className: "Krieger", faction: "horde", discord: "torbjorn", state: "rejected" },
     ] : [];
     var people = previewPeople(config.count, extras);
-    rows = people.map(function (row) {
+    rows = people.filter(function (row) {
+      return row.state === "approved";
+    }).map(function (row) {
       return {
         id: row.id,
         created_at: row.created_at,
         character_name: row.character_name,
         className: row.className,
         faction: row.faction,
-        discord_name: row.discord_name,
+        discord_name: "",
         is_mine: false,
-        state: row.state || "",
+        state: "approved",
       };
     });
     adminRows = admin ? people.map(function (row) {
@@ -1498,9 +1541,24 @@
     applyTabHash();
   }
 
+  function pinHeader() {
+    var header = document.querySelector(".header");
+    if (!header) return;
+    document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+  }
+
   function boot() {
+    pinHeader();
+    window.addEventListener("resize", pinHeader);
     setupTabs();
     syncSignupGate();
+    var orgaToggle = document.getElementById("orga-toggle");
+    if (orgaToggle) {
+      orgaToggle.addEventListener("click", function () {
+        orgaOpen = !orgaOpen;
+        renderKonto();
+      });
+    }
     var form = document.getElementById("tournament-form");
     if (form) {
       form.addEventListener("submit", function (event) {
@@ -1519,7 +1577,7 @@
     if (logout) logout.addEventListener("click", logoutAccount);
     preview = previewConfig();
     remote = createRemote();
-    if (preview && preview.role !== "gast") {
+    if (preview) {
       bootPreview(preview);
       return;
     }
