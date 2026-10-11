@@ -125,27 +125,6 @@
           ·
           <a href="https://thearcflame.github.io/">Gilde</a>
         </p>
-        <p class="orga">
-          <button type="button" class="orga-toggle" id="orga-toggle">Orga-Login</button>
-        </p>
-        <div class="konto" id="konto" hidden>
-          <p class="muted">Nur für die Turnierleitung.</p>
-          <p id="konto-status" class="status is-ok" hidden></p>
-          <form id="konto-form">
-            <div class="fields">
-              <div>
-                <label for="konto-email">E-Mail</label>
-                <input type="email" id="konto-email" name="email" autocomplete="username" inputmode="email" maxlength="120" required>
-              </div>
-              <div>
-                <label for="konto-password">Passwort</label>
-                <input type="password" id="konto-password" name="password" autocomplete="current-password" minlength="6" required>
-              </div>
-            </div>
-            <button type="submit" class="btn-admin" id="konto-submit">Anmelden</button>
-          </form>
-          <button type="button" class="btn-ghost" id="konto-logout" hidden>Abmelden</button>
-        </div>
       </section>
     </div>
 
@@ -184,6 +163,30 @@
           <p class="muted">Liste wird geladen…</p>
         </div>
       </section>
+    </div>
+
+    <div class="wrap">
+      <p class="orga">
+        <button type="button" class="orga-toggle" id="orga-toggle">Orga-Login</button>
+      </p>
+      <div class="konto" id="konto" hidden>
+        <p class="muted">Nur für die Turnierleitung.</p>
+        <p id="konto-status" class="status is-ok" hidden></p>
+        <form id="konto-form">
+          <div class="fields">
+            <div>
+              <label for="konto-email">E-Mail</label>
+              <input type="email" id="konto-email" name="email" autocomplete="username" inputmode="email" maxlength="120" required>
+            </div>
+            <div>
+              <label for="konto-password">Passwort</label>
+              <input type="password" id="konto-password" name="password" autocomplete="current-password" minlength="6" required>
+            </div>
+          </div>
+          <button type="submit" class="btn-admin" id="konto-submit">Anmelden</button>
+        </form>
+        <button type="button" class="btn-ghost" id="konto-logout" hidden>Abmelden</button>
+      </div>
     </div>
   </main>
 
