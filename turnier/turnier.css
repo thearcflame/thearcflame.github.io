@@ -122,7 +122,7 @@ html { scroll-padding-top: calc(var(--header-h, 4.75rem) + 3.6rem); }
 
 .tabbar {
   position: sticky;
-  top: var(--header-h, 4.75rem);
+  top: calc(var(--header-h, 4.75rem) + 2px);
   z-index: 2;
   background: #09060a;
   padding: 0.65rem 0 0.35rem;

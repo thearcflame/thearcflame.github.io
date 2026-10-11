@@ -1544,7 +1544,8 @@
   function pinHeader() {
     var header = document.querySelector(".header");
     if (!header) return;
-    document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+    var height = Math.ceil(header.getBoundingClientRect().height);
+  document.documentElement.style.setProperty("--header-h", height + "px");
   }
 
   function boot() {
