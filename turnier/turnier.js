@@ -6,6 +6,8 @@
   var SIGNUP_FROM = "2026-10-11";
   var GUEST_LIST = "Noch kein freigegebener Teilnehmer.";
   var THANKS = "Danke! Deine Anmeldung ist eingegangen und wird von Malus Magnus freigegeben.";
+  var DISCORD_URL = "https://discord.gg/8xCcp5ePzj";
+  var DISCORD_NOTE = "Wichtig: Tritt unserem Discord bei, damit du in den Turnier-Sprachkanal kommst!";
   var VISIBLE_NOTE = "Turnierbaum sichtbar für angemeldete Teilnehmer.";
   var WAITING_NOTE = "Turnierbaum folgt nach der Auslosung.";
   var PREVIEW_NOTE = "Vorschau – noch nicht ausgelost";
@@ -121,6 +123,21 @@
     el.hidden = false;
     el.textContent = message;
     el.className = "status " + (kind === "error" ? "is-error" : "is-ok");
+  }
+
+  function showThanks() {
+    var el = document.getElementById("tournament-status");
+    if (!el) return;
+    el.hidden = false;
+    el.className = "status is-ok";
+    el.replaceChildren();
+    el.appendChild(document.createTextNode(THANKS + " " + DISCORD_NOTE + " "));
+    var link = document.createElement("a");
+    link.href = DISCORD_URL;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Discord beitreten";
+    el.appendChild(link);
   }
 
   function showBoardStatus(message, kind) {
@@ -712,7 +729,7 @@
     var honeypot = fieldValue("tournament-website").trim();
     if (honeypot) {
       if (form) form.reset();
-      showStatus(THANKS, "info");
+      showThanks();
       return;
     }
     if (previewActive()) {
@@ -726,7 +743,7 @@
         return;
       }
       if (form) form.reset();
-      showStatus(THANKS, "info");
+      showThanks();
       return;
     }
     var button = document.getElementById("tournament-submit");
@@ -748,7 +765,7 @@
         return null;
       }
       if (form) form.reset();
-      showStatus(THANKS, "info");
+      showThanks();
       return refreshAfterSignup();
     }).catch(function () {
       showStatus("Die Anmeldung konnte nicht gespeichert werden.", "error");

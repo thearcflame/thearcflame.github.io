@@ -212,6 +212,30 @@ html { scroll-padding-top: calc(var(--header-h, 4.75rem) + 3.6rem); }
   text-align: center;
 }
 
+.discord-box {
+  margin: 1.25rem 0 0;
+  border: 1px solid rgba(176, 124, 255, 0.55);
+  border-radius: 0.75rem;
+  background: rgba(88, 80, 160, 0.28);
+  padding: 1rem;
+}
+
+.discord-box p {
+  margin: 0;
+  color: var(--text);
+  font-weight: 750;
+}
+
+.discord-box .btn { margin-top: 0.85rem; }
+
+.field-hint {
+  margin: 0.35rem 0 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.status a { color: var(--amber); font-weight: 800; }
+
 form { margin-top: 1.25rem; }
 
 fieldset {
