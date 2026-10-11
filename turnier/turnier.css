@@ -243,6 +243,45 @@ input:focus, select:focus { outline: 2px solid var(--gold); outline-offset: 1px;
 
 .submit:disabled { cursor: not-allowed; opacity: 0.5; }
 
+.rules {
+  margin: 1.25rem 0 0;
+  padding: 0 0 0 1.35rem;
+}
+
+.rules li {
+  margin-top: 0.85rem;
+  color: var(--soft);
+}
+
+.rules strong { color: var(--text); }
+
+.rules-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  margin-bottom: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.rules-check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: 1.25rem;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  flex: 0 0 auto;
+  accent-color: #f4c343;
+}
+
+.rules-check a {
+  color: var(--amber);
+  font-weight: 800;
+}
+
 .list-block {
   margin-top: 1.5rem;
   padding-top: 1rem;

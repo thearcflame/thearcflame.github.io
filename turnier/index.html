@@ -26,6 +26,7 @@
     <div class="wrap">
       <div class="tabs" role="tablist" aria-label="Bereiche">
         <button type="button" class="tab" id="tab-anmeldung" role="tab" aria-selected="true" aria-controls="panel-anmeldung">Anmeldung</button>
+        <button type="button" class="tab" id="tab-regeln" role="tab" aria-selected="false" aria-controls="panel-regeln" tabindex="-1">Regeln</button>
         <button type="button" class="tab" id="tab-ko" role="tab" aria-selected="false" aria-controls="panel-ko" tabindex="-1">K.-o.-System</button>
         <button type="button" class="tab" id="tab-teilnehmer" role="tab" aria-selected="false" aria-controls="teilnehmer" tabindex="-1">Teilnehmer</button>
       </div>
@@ -125,6 +126,10 @@
               </div>
             </div>
           </fieldset>
+          <label class="rules-check" for="tournament-rules">
+            <input type="checkbox" id="tournament-rules" name="rules_accepted">
+            <span>Ich habe die <a href="#regeln" id="regeln-link">Regeln</a> gelesen und akzeptiere sie</span>
+          </label>
           <p id="tournament-status" class="status is-ok" hidden role="status"></p>
           <button type="submit" id="tournament-submit" class="btn submit" disabled>Zum Turnier der Kraft anmelden</button>
         </form>
@@ -134,6 +139,21 @@
           ·
           <a href="https://thearcflame.github.io/">Gilde</a>
         </p>
+      </section>
+    </div>
+
+    <div class="wrap">
+      <section class="panel tab-panel" id="panel-regeln" role="tabpanel" aria-labelledby="tab-regeln" hidden>
+        <h2>Regeln – Turnier der Kraft</h2>
+        <p class="lead">Das Turnier läuft auf dem Mega-Server von WoW Forever nach den PvE-Regeln.</p>
+        <ol class="rules">
+          <li><strong>PvP in der Arena:</strong> Wer die Arena der Gurubashi betritt, wird automatisch für PvP markiert. Das ist im Spiel so und gehört dazu.</li>
+          <li><strong>Nur wer dran ist, betritt die Arena:</strong> Sobald die Kämpfe beginnen, dürfen nur die zwei Spieler in die Arena, die gerade kämpfen. Wer reingeht, obwohl er nicht dran ist, wird disqualifiziert und ist raus.</li>
+          <li><strong>Pünktlich sein:</strong> Wer aufgerufen wird und nicht innerhalb von 5 Minuten da ist, verliert das Duell.</li>
+          <li><strong>Fair bleiben:</strong> Keine Hilfe von außen, also kein Heilen, keine Buffs und kein Eingreifen von anderen Spielern. Wer das macht, wird disqualifiziert.</li>
+          <li><strong>Respekt:</strong> Kein Beleidigen, kein Trashtalk unter der Gürtellinie. Es geht um Spaß und Ehre.</li>
+          <li><strong>Die Orga entscheidet:</strong> Bei Streit entscheidet Malus Magnus, und das gilt.</li>
+        </ol>
       </section>
     </div>
 

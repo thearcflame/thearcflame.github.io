@@ -679,6 +679,11 @@
       showStatus("Bitte einen Discord-Namen mit 2 bis 40 Zeichen eingeben.", "error");
       return;
     }
+    var rules = document.getElementById("tournament-rules");
+    if (!rules || !rules.checked) {
+      showStatus("Bitte die Regeln lesen und akzeptieren.", "error");
+      return;
+    }
     var button = document.getElementById("tournament-submit");
     sending = true;
     if (button) button.disabled = true;
@@ -1424,6 +1429,7 @@
   function selectTab(id) {
     var tabs = [
       { id: "anmeldung", button: "tab-anmeldung", panel: "panel-anmeldung" },
+      { id: "regeln", button: "tab-regeln", panel: "panel-regeln" },
       { id: "ko", button: "tab-ko", panel: "panel-ko" },
       { id: "teilnehmer", button: "tab-teilnehmer", panel: "teilnehmer" },
     ];
@@ -1439,9 +1445,25 @@
     });
   }
 
+  function tabHash(id) {
+    if (id === "regeln") return "#regeln";
+    if (id === "ko") return "#ko";
+    if (id === "teilnehmer") return "#teilnehmer";
+    return "";
+  }
+
+  function applyTabHash() {
+    var hash = String(window.location.hash || "");
+    if (hash === "#regeln") selectTab("regeln");
+    else if (hash === "#teilnehmer") selectTab("teilnehmer");
+    else if (hash === "#turnierbaum" || hash === "#ko") selectTab("ko");
+    else selectTab("anmeldung");
+  }
+
   function setupTabs() {
     var buttons = [
       { id: "anmeldung", button: "tab-anmeldung" },
+      { id: "regeln", button: "tab-regeln" },
       { id: "ko", button: "tab-ko" },
       { id: "teilnehmer", button: "tab-teilnehmer" },
     ];
@@ -1449,13 +1471,31 @@
       var button = document.getElementById(tab.button);
       if (!button) return;
       button.addEventListener("click", function () {
+        var next = tabHash(tab.id);
+        var base = window.location.pathname + window.location.search;
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, "", next ? base + next : base);
+        }
         selectTab(tab.id);
       });
     });
-    var hash = String(window.location.hash || "");
-    if (hash === "#teilnehmer") selectTab("teilnehmer");
-    else if (hash === "#turnierbaum" || hash === "#ko") selectTab("ko");
-    else selectTab("anmeldung");
+    var link = document.getElementById("regeln-link");
+    if (link) {
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        var base = window.location.pathname + window.location.search;
+        if (window.history && window.history.pushState) {
+          window.history.pushState(null, "", base + "#regeln");
+        } else {
+          window.location.hash = "regeln";
+        }
+        selectTab("regeln");
+      });
+    }
+    window.addEventListener("hashchange", applyTabHash);
+    window.addEventListener("popstate", applyTabHash);
+    applyTabHash();
   }
 
   function boot() {
