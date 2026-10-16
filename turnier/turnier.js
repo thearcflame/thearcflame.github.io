@@ -1285,7 +1285,11 @@
     var block = document.createElement("div");
     block.className = "ko-wrap";
     block.appendChild(h("h3", "", "K.-o.-Runde"));
-    var final = rounds[rounds.length - 1][0];
+    var lastRound = rounds[rounds.length - 1];
+    var final = null;
+    lastRound.forEach(function (match) {
+      if (!match.bye && !match.byeSide) final = match;
+    });
     if (final && final.winner) {
       var winner = api.entryById(shownBoard, final.winner);
       if (winner) {
@@ -1304,9 +1308,10 @@
     rounds.forEach(function (round) {
       var col = document.createElement("div");
       col.className = "ko-col";
-      col.appendChild(h("h3", "", api.roundName(round.length)));
+      var title = shownBoard.mode === "ko" ? api.columnTitle(round) : api.roundName(round.length);
+      col.appendChild(h("h3", "", title));
       round.forEach(function (match) {
-        col.appendChild(renderMatch(match, api.roundName(round.length)));
+        col.appendChild(renderMatch(match, title));
       });
       ko.appendChild(col);
     });

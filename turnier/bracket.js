@@ -92,6 +92,18 @@
     return "Runde der " + matchCount * 2;
   }
 
+  function columnTitle(round) {
+    var players = 0;
+    round.forEach(function (match) {
+      players += isByeSlot(match) ? 1 : 2;
+    });
+    if (players <= 2) return "Finale";
+    if (players === 4) return "Halbfinale";
+    if (players === 8) return "Viertelfinale";
+    if (players === 16) return "Achtelfinale";
+    return "Runde der " + players;
+  }
+
   function clone(board) {
     return JSON.parse(JSON.stringify(board));
   }
@@ -388,22 +400,242 @@
     };
   }
 
+  function isByeSlot(match) {
+    return !!(match && (match.bye || match.byeSide));
+  }
+
+  function planRounds(count) {
+    var rounds = [];
+    var players = count;
+    while (players > 1) {
+      var bye = players % 2 === 1;
+      var duels = Math.floor(players / 2);
+      rounds.push({ duels: duels, bye: bye });
+      players = duels + (bye ? 1 : 0);
+    }
+    return rounds;
+  }
+
+  function labelsForInfo(info) {
+    var labels = [];
+    var n;
+    for (n = 1; n <= info.duels; n += 1) labels.push("Sieger Duell " + n);
+    if (info.bye) labels.push("Freilos wird ausgelost");
+    return labels;
+  }
+
+  function labelsFromRound(roundMatches) {
+    var duels = 0;
+    var bye = false;
+    roundMatches.forEach(function (match) {
+      if (isByeSlot(match)) bye = true;
+      else duels += 1;
+    });
+    return labelsForInfo({ duels: duels, bye: bye });
+  }
+
+  function shellDuel(match, labelA, labelB) {
+    match.a = null;
+    match.b = null;
+    match.winner = null;
+    match.bye = false;
+    match.byeSide = null;
+    match.placeholderA = labelA;
+    match.placeholderB = labelB;
+  }
+
+  function shellBye(match) {
+    match.a = null;
+    match.b = null;
+    match.winner = null;
+    match.bye = false;
+    match.byeSide = "b";
+    match.placeholderA = "Freilos wird ausgelost";
+    match.placeholderB = null;
+  }
+
+  function applyDuel(match, left, right) {
+    match.a = left;
+    match.b = right;
+    match.winner = null;
+    match.bye = false;
+    match.byeSide = null;
+    match.placeholderA = null;
+    match.placeholderB = null;
+  }
+
+  function applyBye(match, player) {
+    match.a = player;
+    match.b = null;
+    match.winner = player;
+    match.bye = true;
+    match.byeSide = "b";
+    match.placeholderA = null;
+    match.placeholderB = null;
+  }
+
+  function shellRound(roundMatches, labels) {
+    var duels = [];
+    var byeMatch = null;
+    roundMatches.forEach(function (match) {
+      if (isByeSlot(match)) byeMatch = match;
+      else duels.push(match);
+    });
+    duels.sort(function (a, b) { return a.slot - b.slot; });
+    var index = 0;
+    duels.forEach(function (match) {
+      shellDuel(match, labels[index] || "Sieger Duell", labels[index + 1] || "Sieger Duell");
+      index += 2;
+    });
+    if (byeMatch) shellBye(byeMatch);
+  }
+
+  function hadBye(board, entryId, beforeRound) {
+    var i;
+    for (i = 0; i < board.matches.length; i += 1) {
+      var match = board.matches[i];
+      if (match.stage === "ko" && match.round < beforeRound && match.bye && match.winner === entryId) return true;
+    }
+    return false;
+  }
+
+  function fillKoRound(board, roundMatches, playerIds, rng) {
+    var roundNo = roundMatches[0].round;
+    var duels = [];
+    var byeMatch = null;
+    roundMatches.forEach(function (match) {
+      if (isByeSlot(match)) byeMatch = match;
+      else duels.push(match);
+    });
+    duels.sort(function (a, b) { return a.slot - b.slot; });
+    var pool = playerIds.slice();
+    if (byeMatch) {
+      var fresh = pool.filter(function (id) { return !hadBye(board, id, roundNo); });
+      var choiceFrom = fresh.length ? fresh : pool;
+      var byeId = choiceFrom[Math.floor(rng() * choiceFrom.length)];
+      pool = pool.filter(function (id) { return id !== byeId; });
+      applyBye(byeMatch, byeId);
+    }
+    var paired = shuffle(pool, rng);
+    duels.forEach(function (match, index) {
+      applyDuel(match, paired[index * 2], paired[index * 2 + 1]);
+    });
+  }
+
+  function collectPlayers(roundMatches) {
+    var ids = [];
+    roundMatches.forEach(function (match) {
+      if (match.a) ids.push(match.a);
+      if (match.b) ids.push(match.b);
+    });
+    return ids;
+  }
+
+  function sameIdSet(left, right) {
+    if (left.length !== right.length) return false;
+    var a = left.slice().sort();
+    var b = right.slice().sort();
+    var i;
+    for (i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  function roundWinners(roundMatches) {
+    var ordered = roundMatches.slice().sort(function (a, b) { return a.slot - b.slot; });
+    var winners = [];
+    var i;
+    for (i = 0; i < ordered.length; i += 1) {
+      if (!ordered[i].winner) return null;
+      winners.push(ordered[i].winner);
+    }
+    return winners;
+  }
+
+  function roundReady(roundMatches, winners) {
+    var i;
+    if (!sameIdSet(collectPlayers(roundMatches), winners)) return false;
+    for (i = 0; i < roundMatches.length; i += 1) {
+      var match = roundMatches[i];
+      if (isByeSlot(match)) {
+        if (!match.bye || !match.a || match.b || match.winner !== match.a) return false;
+      } else if (!match.a || !match.b) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function shellFrom(rounds, start) {
+    var i;
+    for (i = start; i < rounds.length; i += 1) {
+      shellRound(rounds[i], labelsFromRound(rounds[i - 1]));
+    }
+  }
+
+  function koUsesFeeds(board) {
+    var i;
+    for (i = 0; i < board.matches.length; i += 1) {
+      if (board.matches[i].stage === "ko" && board.matches[i].feeds) return true;
+    }
+    return false;
+  }
+
+  function advanceDirectKo(board, rng) {
+    var rounds = koRounds(board);
+    var i;
+    for (i = 0; i < rounds.length - 1; i += 1) {
+      var winners = roundWinners(rounds[i]);
+      if (!winners) {
+        shellFrom(rounds, i + 1);
+        return;
+      }
+      if (!roundReady(rounds[i + 1], winners)) {
+        shellFrom(rounds, i + 1);
+        fillKoRound(board, rounds[i + 1], winners, rng || Math.random);
+      }
+    }
+  }
+
   function buildDirectKo(ordered, rng, nextId) {
     var entries = ordered.map(function (row, index) {
       return makeEntry(row, nextId("e"), null, index);
     });
-    var seeds = entries.map(function (entry) {
-      return { entryId: entry.id, source: null, placeholder: null };
-    });
+    var plan = planRounds(entries.length);
+    var matches = [];
+    var r;
+    var i;
+    for (r = 0; r < plan.length; r += 1) {
+      var info = plan[r];
+      var labels = r === 0 ? null : labelsForInfo(plan[r - 1]);
+      var labelIndex = 0;
+      function nextLabel() {
+        var label = labels && labels[labelIndex] ? labels[labelIndex] : "Sieger Duell";
+        labelIndex += 1;
+        return label;
+      }
+      for (i = 0; i < info.duels; i += 1) {
+        var duel = blankMatch(nextId("m"), "ko", r + 1, i);
+        if (labels) shellDuel(duel, nextLabel(), nextLabel());
+        matches.push(duel);
+      }
+      if (info.bye) {
+        var byeMatch = blankMatch(nextId("m"), "ko", r + 1, info.duels);
+        byeMatch.byeSide = "b";
+        if (labels) shellBye(byeMatch);
+        matches.push(byeMatch);
+      }
+    }
     var board = {
       mode: "ko",
       entries: entries,
       groups: [],
-      matches: buildKoMatches(placeSeeds(seeds), function () { return nextId("m"); }),
+      matches: matches,
     };
-    board.matches.forEach(function (match) {
-      if (match.round === 1 && match.byeSide) resolveStructuralBye(board, match);
-    });
+    fillKoRound(board, matches.filter(function (match) { return match.round === 1; }), entries.map(function (entry) {
+      return entry.id;
+    }), rng);
     return board;
   }
 
@@ -461,7 +693,7 @@
     return board;
   }
 
-  function setWinner(board, matchId, winnerId) {
+  function setWinner(board, matchId, winnerId, rng) {
     var next = clone(board);
     var match = findMatch(next, matchId);
     if (!match || match.bye) return next;
@@ -469,18 +701,24 @@
     if (winnerId !== match.a && winnerId !== match.b) return next;
     if (match.winner === winnerId) return next;
     match.winner = winnerId;
-    pushForward(next, match);
-    if (match.stage === "group") refreshQualifiers(next);
+    if (next.mode === "ko" && !koUsesFeeds(next)) advanceDirectKo(next, rng);
+    else {
+      pushForward(next, match);
+      if (match.stage === "group") refreshQualifiers(next);
+    }
     return next;
   }
 
-  function clearWinner(board, matchId) {
+  function clearWinner(board, matchId, rng) {
     var next = clone(board);
     var match = findMatch(next, matchId);
     if (!match || match.bye || !match.winner) return next;
     match.winner = null;
-    pushForward(next, match);
-    if (match.stage === "group") refreshQualifiers(next);
+    if (next.mode === "ko" && !koUsesFeeds(next)) advanceDirectKo(next, rng);
+    else {
+      pushForward(next, match);
+      if (match.stage === "group") refreshQualifiers(next);
+    }
     return next;
   }
 
@@ -542,6 +780,7 @@
     groupLabel: groupLabel,
     roundRobin: roundRobin,
     roundName: roundName,
+    columnTitle: columnTitle,
     rankEntries: rankEntries,
     groupComplete: groupComplete,
     createDraw: createDraw,
