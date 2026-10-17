@@ -230,7 +230,7 @@ begin
     raise exception 'Eine Anmeldung kommt doppelt vor.';
   end if;
 
-  delete from public.tournament_draws;
+  delete from public.tournament_draws where true;
 
   insert into public.tournament_draws (mode, created_by)
   values (v_mode, auth.uid())
