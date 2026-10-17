@@ -452,7 +452,7 @@ begin
     raise exception 'Eine Anmeldung kommt doppelt vor.';
   end if;
 
-  delete from public.tournament_draws;
+  delete from public.tournament_draws where true;
 
   insert into public.tournament_draws (mode, created_by)
   values (v_mode, auth.uid())
@@ -637,7 +637,7 @@ begin
     raise exception 'Nur ein Administrator kann die Auslosung zurücksetzen.';
   end if;
   perform pg_advisory_xact_lock(4815162342);
-  delete from public.tournament_draws;
+  delete from public.tournament_draws where true;
   return public.tournament_board();
 end;
 $$;
