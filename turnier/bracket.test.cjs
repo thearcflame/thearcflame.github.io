@@ -75,27 +75,54 @@ function sameGroupClashes(board) {
   });
 }
 
+function roundDuels(round) {
+  return round.filter(function (match) { return !match.bye && !match.byeSide; });
+}
+
+function roundByes(round) {
+  return round.filter(function (match) { return match.bye || match.byeSide; });
+}
+
+function placeholderText(round) {
+  return round.map(function (match) {
+    return (match.placeholderA || "") + " " + (match.placeholderB || "");
+  }).join(" ");
+}
+
 const five = B.createDraw(people(5), rngFrom(5));
 assert.strictEqual(five.mode, "ko");
 assert.strictEqual(five.entries.length, 5);
 const fiveR1 = koMatches(five, 1);
-assert.strictEqual(fiveR1.length, 4);
-const fiveByes = fiveR1.filter(function (match) { return match.bye; });
-assert.strictEqual(fiveByes.length, 3);
-fiveByes.forEach(function (match) {
-  assert.ok(match.winner);
-  assert.ok(match.a || match.b);
-  assert.ok(!(match.a && match.b));
-  const next = five.matches.find(function (item) { return item.id === match.feeds; });
-  const slot = match.feedsSlot === "b" ? next.b : next.a;
-  assert.strictEqual(slot, match.winner);
+assert.strictEqual(roundDuels(fiveR1).length, 2);
+assert.strictEqual(roundByes(fiveR1).filter(function (match) { return match.bye; }).length, 1);
+assert.strictEqual(roundByes(fiveR1)[0].winner, roundByes(fiveR1)[0].a);
+assert.ok(!roundByes(fiveR1)[0].b);
+const fiveR2 = koMatches(five, 2);
+assert.strictEqual(roundDuels(fiveR2).length, 1);
+assert.strictEqual(roundByes(fiveR2).length, 1);
+assert.ok(placeholderText(fiveR2).indexOf("Sieger Duell 1") !== -1);
+assert.ok(placeholderText(fiveR2).indexOf("Freilos wird ausgelost") !== -1);
+fiveR2.forEach(function (match) {
+  assert.strictEqual(match.a, null);
+  assert.strictEqual(match.winner, null);
 });
-assert.strictEqual(five.matches.filter(function (match) { return match.stage === "ko"; }).length, 7);
-const halves = [fiveR1.slice(0, 2), fiveR1.slice(2)];
-halves.forEach(function (half) {
-  const byes = half.filter(function (match) { return match.bye; }).length;
-  assert.ok(byes >= 1 && byes <= 2);
-});
+assert.strictEqual(koMatches(five, 3).length, 1);
+assert.ok(placeholderText(koMatches(five, 3)).indexOf("Sieger Duell 1") !== -1);
+assert.ok(placeholderText(koMatches(five, 3)).indexOf("Freilos wird ausgelost") !== -1);
+
+const six = B.createDraw(people(6), rngFrom(6));
+const sixR1 = koMatches(six, 1);
+assert.strictEqual(roundDuels(sixR1).length, 3);
+assert.strictEqual(roundByes(sixR1).length, 0);
+const sixR2 = koMatches(six, 2);
+assert.strictEqual(roundDuels(sixR2).length, 1);
+assert.strictEqual(roundByes(sixR2).length, 1);
+assert.ok(placeholderText(sixR2).indexOf("Sieger Duell 1") !== -1);
+assert.ok(placeholderText(sixR2).indexOf("Freilos wird ausgelost") !== -1);
+assert.strictEqual(koMatches(six, 3).length, 1);
+assert.strictEqual(B.columnTitle(sixR1), "Runde der 6");
+assert.strictEqual(B.columnTitle(sixR2), "Runde der 3");
+assert.strictEqual(B.columnTitle(koMatches(six, 3)), "Finale");
 
 const sixteen = B.createDraw(people(16), rngFrom(16));
 assert.strictEqual(sixteen.mode, "ko");
@@ -111,26 +138,135 @@ assert.strictEqual(koMatches(sixteen, 2).length, 4);
 koMatches(sixteen, 2).forEach(function (match) {
   assert.strictEqual(match.a, null);
   assert.strictEqual(match.b, null);
+  assert.ok((match.placeholderA || "").indexOf("Sieger Duell") === 0);
 });
 assert.strictEqual(sixteen.matches.length, 15);
 
 let played = sixteen;
 const first = koMatches(played, 1)[0];
-played = B.setWinner(played, first.id, first.a);
-let semi = played.matches.find(function (match) { return match.id === first.feeds; });
-assert.strictEqual(semi[first.feedsSlot], first.a);
-const otherFirst = koMatches(played, 1)[1];
-played = B.setWinner(played, otherFirst.id, otherFirst.b);
-semi = played.matches.find(function (match) { return match.id === first.feeds; });
-assert.ok(semi.a && semi.b);
-played = B.setWinner(played, semi.id, semi.a);
-const downstream = played.matches.find(function (match) { return match.id === semi.feeds; });
-assert.strictEqual(downstream.winner, null);
-assert.strictEqual(downstream[semi.feedsSlot], semi.a);
-played = B.clearWinner(played, semi.id);
-const downstreamAfter = played.matches.find(function (match) { return match.id === semi.feeds; });
-assert.strictEqual(downstreamAfter.winner, null);
-assert.strictEqual(downstreamAfter[semi.feedsSlot], null);
+played = B.setWinner(played, first.id, first.a, rngFrom(21));
+koMatches(played, 2).forEach(function (match) {
+  assert.strictEqual(match.a, null);
+  assert.strictEqual(match.b, null);
+});
+koMatches(played, 1).forEach(function (match) {
+  if (!match.winner) played = B.setWinner(played, match.id, match.a, rngFrom(22));
+});
+const sixteenR2 = koMatches(played, 2);
+assert.strictEqual(sixteenR2.length, 4);
+const seenR2 = {};
+sixteenR2.forEach(function (match) {
+  assert.ok(match.a && match.b);
+  assert.strictEqual(match.bye, false);
+  assert.strictEqual(match.winner, null);
+  assert.notStrictEqual(match.a, match.b);
+  assert.strictEqual(seenR2[match.a], undefined);
+  assert.strictEqual(seenR2[match.b], undefined);
+  seenR2[match.a] = true;
+  seenR2[match.b] = true;
+});
+const kept = sixteenR2[1];
+const keptPair = [kept.a, kept.b];
+played = B.setWinner(played, sixteenR2[0].id, sixteenR2[0].a, rngFrom(23));
+const keptAfter = koMatches(played, 2)[1];
+assert.strictEqual(keptAfter.a, keptPair[0]);
+assert.strictEqual(keptAfter.b, keptPair[1]);
+played = B.clearWinner(played, first.id);
+koMatches(played, 2).forEach(function (match) {
+  assert.strictEqual(match.a, null);
+  assert.strictEqual(match.winner, null);
+  assert.ok((match.placeholderA || "").indexOf("Sieger Duell") === 0);
+});
+
+function priorByes(board, roundNo) {
+  const had = {};
+  board.matches.forEach(function (match) {
+    if (match.stage === "ko" && match.round < roundNo && match.bye && match.winner) had[match.winner] = true;
+  });
+  return had;
+}
+
+function assertFilledRound(board, round) {
+  const players = [];
+  round.forEach(function (match) {
+    if (match.a) players.push(match.a);
+    if (match.b) players.push(match.b);
+  });
+  const unique = {};
+  players.forEach(function (id) {
+    assert.strictEqual(unique[id], undefined);
+    unique[id] = true;
+  });
+  const odd = players.length % 2 === 1;
+  const byes = round.filter(function (match) { return match.bye; });
+  if (!odd) {
+    assert.strictEqual(byes.length, 0);
+    round.forEach(function (match) {
+      assert.ok(match.a && match.b);
+    });
+  } else {
+    assert.strictEqual(byes.length, 1);
+    assert.ok(byes[0].a && !byes[0].b);
+    assert.strictEqual(byes[0].winner, byes[0].a);
+    const had = priorByes(board, round[0].round);
+    const fresh = players.filter(function (id) { return !had[id]; });
+    if (fresh.length) assert.ok(fresh.indexOf(byes[0].winner) !== -1);
+  }
+  return players;
+}
+
+for (let count = 2; count <= 16; count += 1) {
+  for (let seed = 1; seed <= 4; seed += 1) {
+    let board = B.createDraw(people(count), rngFrom(count * 100 + seed));
+    const ids = {};
+    assertFilledRound(board, koMatches(board, 1)).forEach(function (id) { ids[id] = true; });
+    assert.strictEqual(Object.keys(ids).length, count);
+    const rng = rngFrom(9000 + count * 10 + seed);
+    let guard = 0;
+    while (guard < 80) {
+      guard += 1;
+      const rounds = B.koRounds(board);
+      let open = null;
+      let started = false;
+      for (let r = 0; r < rounds.length; r += 1) {
+        const round = rounds[r];
+        const hasPlayers = round.some(function (match) { return match.a || match.b; });
+        if (!hasPlayers) {
+          if (started) {
+            assert.ok(placeholderText(round).indexOf("Sieger Duell") !== -1 || round.length === 0);
+          }
+          break;
+        }
+        started = true;
+        const players = assertFilledRound(board, round);
+        if (r > 0) {
+          const previous = roundWinnersOf(rounds[r - 1]);
+          assert.strictEqual(players.slice().sort().join(","), previous.slice().sort().join(","));
+        }
+        open = roundDuels(round).find(function (match) { return match.a && match.b && !match.winner; }) || null;
+        if (open) break;
+      }
+      if (!open) break;
+      board = B.setWinner(board, open.id, guard % 2 === 0 ? open.a : open.b, rng);
+    }
+    const rounds = B.koRounds(board);
+    const last = rounds[rounds.length - 1];
+    const finalMatch = roundDuels(last)[0];
+    assert.ok(finalMatch && finalMatch.winner);
+    const losses = {};
+    board.matches.forEach(function (match) {
+      if (match.stage !== "ko" || !match.winner || !match.a || !match.b) return;
+      losses[match.winner === match.a ? match.b : match.a] = true;
+    });
+    const alive = board.entries.filter(function (entry) { return !losses[entry.id]; });
+    assert.strictEqual(alive.length, 1);
+    assert.strictEqual(alive[0].id, finalMatch.winner);
+  }
+}
+
+function roundWinnersOf(round) {
+  return round.map(function (match) { return match.winner; });
+}
 
 const limit = B.createDraw(people(B.KO_LIMIT), rngFrom(1));
 assert.strictEqual(B.KO_LIMIT, 32);
