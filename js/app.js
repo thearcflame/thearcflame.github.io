@@ -6712,6 +6712,7 @@
       dkpLoaded = true;
       dkpLoadFailed = false;
       pruneDkpSelection();
+      loadDkpGroups();
       setDkpLoadStatus("");
       renderDkp();
     }).catch(function (error) {
@@ -7393,6 +7394,7 @@
     renderDkpScores();
     renderDkpHistory();
     renderDkpOfficer();
+    renderDkpGroupPicker();
     if (dkpBusy) setDkpBusy(true);
   }
 
@@ -7414,6 +7416,10 @@
   function handleDkpChange(event) {
     const target = event.target;
     if (!target) return false;
+    if (target.name === "dkp-group-player") {
+      syncDkpGroupCount(target);
+      return true;
+    }
     const tracked = target.id || target.name === "dkp-award-player" || target.name === "dkp-import-player";
     if (!tracked) return false;
     if (dkpBusy && (target.id === "dkp-import-source" || target.name === "dkp-import-player")) return true;
@@ -7979,6 +7985,10 @@
       openDkpImport();
       return;
     }
+    if (action === "dkp-group-finish" || action === "dkp-group-cancel") {
+      finishDkpGroup(el.dataset.id, action === "dkp-group-cancel");
+      return;
+    }
     if (action === "dkp-reset-all") {
       submitDkpResetAll();
       return;
@@ -8253,6 +8263,229 @@
     });
   }
 
+  let dkpGroups = [];
+  let dkpGroupEpoch = 0;
+
+  function dkpGroupOpenPlayerIds() {
+    const ids = {};
+    dkpGroups.forEach(function (g) {
+      (g.dkp_group_members || []).forEach(function (m) { ids[m.player_id] = g.id; });
+    });
+    return ids;
+  }
+
+  function renderDkpGroupPicker() {
+    const box = document.getElementById("dkp-group-players");
+    if (!box) return;
+    const checked = {};
+    box.querySelectorAll("input[name='dkp-group-player']:checked").forEach(function (el) { checked[el.value] = true; });
+    const busy = dkpGroupOpenPlayerIds();
+    box.textContent = "";
+    const players = (dkpPlayers || []).filter(function (p) { return p.active; }).slice().sort(function (a, b) {
+      return String(a.char_name || "").localeCompare(String(b.char_name || ""), "de");
+    });
+    if (!players.length) {
+      const empty = document.createElement("p");
+      empty.className = "text-sm text-slate-500";
+      empty.textContent = "Noch keine aktiven Spieler im DKP.";
+      box.appendChild(empty);
+    }
+    players.forEach(function (p) {
+      const label = document.createElement("label");
+      label.className = "inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.name = "dkp-group-player";
+      input.value = p.id;
+      input.className = "h-4 w-4 accent-amber-500";
+      input.checked = !!checked[p.id] && !busy[p.id];
+      const text = document.createElement("span");
+      text.textContent = p.char_name || "";
+      label.appendChild(input);
+      label.appendChild(text);
+      if (busy[p.id]) {
+        input.disabled = true;
+        label.classList.add("opacity-50");
+        const note = document.createElement("span");
+        note.className = "text-xs text-slate-500";
+        note.textContent = "(in Gruppe)";
+        label.appendChild(note);
+      }
+      box.appendChild(label);
+    });
+    const kind = document.getElementById("dkp-group-kind");
+    if (kind) {
+      Array.prototype.forEach.call(kind.options, function (opt) {
+        const typeName = opt.value === "level" ? "Levelgruppe" : "Dungeon";
+        const t = (dkpActivityTypes || []).find(function (x) { return x.name === typeName && x.active; });
+        opt.textContent = typeName + (t ? " (" + dkpNum(t.points) + " DKP)" : "");
+      });
+    }
+    syncDkpGroupCount();
+  }
+
+  function syncDkpGroupCount(changed) {
+    const boxes = document.querySelectorAll("input[name='dkp-group-player']:checked");
+    if (changed && changed.checked && boxes.length > 5) {
+      changed.checked = false;
+      setDkpStatus("dkp-group-status", "Höchstens 5 Spieler pro Gruppe.");
+    }
+    const count = document.getElementById("dkp-group-count");
+    if (count) count.textContent = String(document.querySelectorAll("input[name='dkp-group-player']:checked").length);
+  }
+
+  function loadDkpGroups() {
+    if (!remote || typeof remote.from !== "function" || !canReadDkp()) return Promise.resolve();
+    const epoch = ++dkpGroupEpoch;
+    return remote.from("dkp_groups")
+      .select("id, kind, title, status, created_by, created_at, dkp_group_members(player_id)")
+      .eq("status", "open")
+      .order("created_at", { ascending: true })
+      .then(function (result) {
+        if (epoch !== dkpGroupEpoch) return;
+        if (!result || result.error) throw (result && result.error) || new TypeError("Failed to fetch");
+        dkpGroups = result.data || [];
+        setDkpStatus("dkp-group-list-status", "");
+        renderDkpGroups();
+        renderDkpGroupPicker();
+      }).catch(function (error) {
+        if (epoch !== dkpGroupEpoch) return;
+        setDkpStatus("dkp-group-list-status", dkpErrorText(error));
+      });
+  }
+
+  function dkpGroupMinutes(group) {
+    const start = new Date(group.created_at).getTime();
+    if (!isFinite(start)) return 0;
+    return Math.max(0, Math.floor((Date.now() - start) / 60000));
+  }
+
+  function renderDkpGroups() {
+    const list = document.getElementById("dkp-group-list");
+    if (!list) return;
+    list.textContent = "";
+    if (!dkpGroups.length) {
+      const li = document.createElement("li");
+      li.className = "text-sm text-slate-500";
+      li.textContent = "Gerade ist keine Gruppe angemeldet.";
+      list.appendChild(li);
+      return;
+    }
+    dkpGroups.forEach(function (g) {
+      const li = document.createElement("li");
+      li.className = "space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-4";
+      const head = document.createElement("p");
+      head.className = "text-sm font-bold text-white";
+      head.textContent = (g.kind === "level" ? "Levelgruppe" : "Dungeon") + (g.title ? ": " + g.title : "");
+      const names = (g.dkp_group_members || []).map(function (m) {
+        const p = dkpPlayerById(m.player_id);
+        return p ? p.char_name : "?";
+      }).sort(function (a, b) { return a.localeCompare(b, "de"); });
+      const who = document.createElement("p");
+      who.className = "text-sm text-slate-300";
+      who.textContent = names.join(", ");
+      const mins = dkpGroupMinutes(g);
+      const time = document.createElement("p");
+      time.className = "text-xs text-slate-500";
+      time.textContent = "Läuft seit " + mins + " Minuten" + (mins < 30 ? " (DKP ab 30 Minuten)" : "");
+      li.appendChild(head);
+      li.appendChild(who);
+      li.appendChild(time);
+      const mine = currentUser && g.created_by === currentUser.id;
+      if (mine || isOfficer()) {
+        const row = document.createElement("div");
+        row.className = "flex flex-col gap-2 sm:flex-row";
+        const finish = document.createElement("button");
+        finish.type = "button";
+        finish.dataset.action = "dkp-group-finish";
+        finish.dataset.id = g.id;
+        finish.setAttribute("data-dkp-write", "");
+        finish.className = "inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto";
+        finish.textContent = "Beenden & DKP gutschreiben";
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.dataset.action = "dkp-group-cancel";
+        cancel.dataset.id = g.id;
+        cancel.setAttribute("data-dkp-write", "");
+        cancel.className = "inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto";
+        cancel.textContent = "Abbrechen (ohne DKP)";
+        row.appendChild(finish);
+        row.appendChild(cancel);
+        li.appendChild(row);
+      }
+      list.appendChild(li);
+    });
+    if (dkpBusy) setDkpBusy(true);
+  }
+
+  function runDkpGroupWrite(statusId, work) {
+    if (dkpBusy) return;
+    if (!canReadDkp()) {
+      setDkpStatus(statusId, "Nur freigeschaltete Mitglieder dürfen Gruppen anmelden.");
+      return;
+    }
+    setDkpBusy(true);
+    setDkpStatus(statusId, "");
+    Promise.resolve().then(work).then(function (message) {
+      return loadDkp().then(function () { return message; });
+    }).then(function (message) {
+      if (message) {
+        setDkpStatus(statusId, message);
+        notify(message, "info");
+      }
+    }).catch(function (error) {
+      const text = dkpErrorText(error);
+      setDkpStatus(statusId, text);
+      notify(text, "error");
+    }).then(function () {
+      setDkpBusy(false);
+    });
+  }
+
+  function submitDkpGroup() {
+    const kind = (document.getElementById("dkp-group-kind") || {}).value === "level" ? "level" : "dungeon";
+    const title = dkpOptionalText((document.getElementById("dkp-group-title") || {}).value, 80);
+    const ids = Array.prototype.map.call(document.querySelectorAll("input[name='dkp-group-player']:checked"), function (el) { return el.value; });
+    if (ids.length < 2 || ids.length > 5) {
+      setDkpStatus("dkp-group-status", "Eine Gruppe braucht 2 bis 5 Spieler.");
+      return;
+    }
+    runDkpGroupWrite("dkp-group-status", function () {
+      return dkpRpc("dkp_group_start", {
+        p_kind: kind,
+        p_player_ids: ids,
+        p_title: title.value || null,
+      }).then(function () {
+        const form = document.getElementById("dkp-group-form");
+        if (form) form.reset();
+        return (kind === "level" ? "Levelgruppe" : "Dungeongruppe") + " mit " + ids.length + " Spielern angemeldet. Viel Erfolg!";
+      });
+    });
+  }
+
+  function finishDkpGroup(id, cancel) {
+    const group = dkpGroups.find(function (g) { return g.id === id; });
+    if (!group) return;
+    if (!cancel && dkpGroupMinutes(group) < 30) {
+      setDkpStatus("dkp-group-list-status", "Eine Gruppe muss mindestens 30 Minuten laufen, bevor DKP gutgeschrieben werden.");
+      return;
+    }
+    const question = cancel
+      ? "Gruppe wirklich abbrechen? Es werden keine DKP gutgeschrieben."
+      : "Gruppe beenden und allen Mitgliedern die DKP gutschreiben?";
+    if (!window.confirm(question)) return;
+    runDkpGroupWrite("dkp-group-list-status", function () {
+      return dkpRpc("dkp_group_finish", { p_group_id: id, p_cancel: !!cancel }).then(function (data) {
+        if (cancel) return "Gruppe abgebrochen.";
+        const rows = Array.isArray(data) ? data : [];
+        const total = (group.dkp_group_members || []).length;
+        let msg = "Gruppe beendet. " + rows.length + " Spieler haben DKP bekommen.";
+        if (rows.length < total) msg += " " + (total - rows.length) + " Spieler hatten das Tageslimit schon erreicht.";
+        return msg;
+      });
+    });
+  }
+
   function submitDkpPlayer() {
     const name = String((document.getElementById("dkp-player-name") || {}).value || "").trim();
     if (name.length < 2 || name.length > 40) {
@@ -8420,6 +8653,7 @@
     else if (form.id === "dkp-transfer-form") submitDkpTransfer();
     else if (form.id === "dkp-item-form") submitDkpItemAward();
     else if (form.id === "dkp-adjust-form") submitDkpAdjust();
+    else if (form.id === "dkp-group-form") submitDkpGroup();
     else if (form.id === "dkp-player-form") submitDkpPlayer();
     else if (form.id === "dkp-type-form") submitDkpType();
     else if (form.id === "dkp-item-admin-form") submitDkpItemAdmin();
