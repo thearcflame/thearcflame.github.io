@@ -800,6 +800,13 @@
               <p id="dkp-adjust-status" class="text-sm text-amber-200" hidden role="status"></p>
               <button type="submit" data-dkp-write class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-extrabold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Bonus oder Abzug buchen</button>
             </form>
+            <div id="dkp-reset-all-box" data-perm="admin" hidden class="mt-6 space-y-3 rounded-xl border border-red-500/40 bg-slate-950 p-4">
+              <h4 class="text-base font-black text-red-300">DKP für alle zurücksetzen</h4>
+              <p class="text-sm text-slate-400">Nur für Admins. Setzt bei allen Spielern DKP und Überstundenkonto auf 0. Vorher wird automatisch ein Backup gespeichert. Der Verlauf bleibt erhalten.</p>
+              <input type="text" id="dkp-reset-reason" maxlength="300" autocomplete="off" placeholder="Grund (optional), z. B. Neue Phase" class="min-h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-sm text-slate-200 focus:border-amber-500">
+              <p id="dkp-reset-status" class="text-sm text-amber-200" hidden role="status"></p>
+              <button type="button" data-action="dkp-reset-all" data-dkp-write class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-red-600 px-4 py-2 text-sm font-extrabold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">DKP für alle zurücksetzen</button>
+            </div>
           </div>
 
           <div id="dkp-panel-players" role="tabpanel" aria-labelledby="dkp-tab-players" hidden class="space-y-4">

@@ -7979,6 +7979,10 @@
       openDkpImport();
       return;
     }
+    if (action === "dkp-reset-all") {
+      submitDkpResetAll();
+      return;
+    }
     if (action === "dkp-history-more") {
       loadMoreDkpHistory();
       return;
@@ -8217,6 +8221,34 @@
         if (reasonField) reasonField.value = "";
         const label = points > 0 ? "Bonus" : "Abzug";
         return dkpBalanceSummary(row, label + " für " + ((row && row.char_name) || player.char_name) + " gebucht (" + dkpSigned(points) + ").");
+      });
+    });
+  }
+
+  function submitDkpResetAll() {
+    if (!isAdmin()) {
+      setDkpStatus("dkp-reset-status", "Nur Administratoren dürfen die DKP für alle zurücksetzen.");
+      return;
+    }
+    const reason = dkpOptionalText((document.getElementById("dkp-reset-reason") || {}).value, 300);
+    const count = (dkpPlayers || []).length;
+    if (!window.confirm("Wirklich bei ALLEN " + count + " Spielern DKP und Überstundenkonto auf 0 setzen?\nVorher wird ein Backup gespeichert, der Verlauf bleibt erhalten.")) return;
+    const typed = window.prompt("Zur Sicherheit bitte ZURÜCKSETZEN eintippen:");
+    if (typed === null) return;
+    if (typed.trim() !== "ZURÜCKSETZEN") {
+      setDkpStatus("dkp-reset-status", "Abgebrochen: Das Bestätigungswort stimmt nicht.");
+      return;
+    }
+    runDkpWrite("dkp-reset-status", function () {
+      return dkpRpc("dkp_reset_all", {
+        p_confirm: "ZURÜCKSETZEN",
+        p_reason: reason.value || null,
+      }).then(function (data) {
+        const row = Array.isArray(data) ? data[0] : data;
+        const n = row ? Number(row.players_changed) || 0 : 0;
+        const field = document.getElementById("dkp-reset-reason");
+        if (field) field.value = "";
+        return "DKP-Reset erledigt: " + n + " Spieler auf 0 gesetzt. Backup gespeichert.";
       });
     });
   }
